@@ -1,6 +1,6 @@
 #!/bin/bash
 # Autor: josejp2424
-# VERSIÓN 0.2
+# VERSIÓN 0.3
 # Licencia: GNU General Public License v2.0
 #
 # Este programa es software libre; puede redistribuirlo y/o modificarlo
@@ -1050,7 +1050,9 @@ combo_values() {
 get_config_value() {
     local key="$1"
     local default="$2"
-    local value=$(grep -oP "(?<=^${key}\s*=\s*)[^;]+" "$CONFIG_FILE" 2>/dev/null | head -1 | sed 's/ *$//;s/;$//')
+    local value
+    value=$(grep -E "^${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null | head -1 | \
+            sed -E "s/^${key}[[:space:]]*=[[:space:]]*//; s/[[:space:]]*;[[:space:]]*$//; s/^\"//; s/\"$//")
     [[ -z "$value" ]] && echo "$default" || echo "$value"
 }
 
@@ -1067,12 +1069,27 @@ get_wintype_config() {
     local wintype="$1"
     local setting="$2"
     local default="$3"
-    
-    local value=$(sed -n "/^wintypes:/,/^}/p" "$CONFIG_FILE" 2>/dev/null | \
-                 grep -A 10 "$wintype" | grep "$setting" | \
-                 awk -F'=' '{print $2}' | sed 's/[;,]//g; s/ //g')
-    
-    [[ -z "$value" ]] && echo "$default" || echo "$value"
+
+
+    local block_line
+    block_line=$(sed -n "/^wintypes:/,/^};/p" "$CONFIG_FILE" 2>/dev/null | \
+                 grep -E "^[[:space:]]*${wintype}[[:space:]]*=[[:space:]]*\{" | head -1)
+
+    if [ -z "$block_line" ]; then
+        echo "$default"
+        return
+    fi
+
+
+    local inner
+    inner=$(echo "$block_line" | sed -n 's/.*{\(.*\)}.*/\1/p')
+
+
+    local value
+    value=$(echo "$inner" | grep -oE "${setting}[[:space:]]*=[[:space:]]*[^;]+" | \
+            head -1 | sed "s/${setting}[[:space:]]*=[[:space:]]*//;s/[[:space:]]*$//;s/^[[:space:]]*//")
+
+    [ -z "$value" ] && echo "$default" || echo "$value"
 }
 
 
@@ -1097,7 +1114,7 @@ load_config() {
     INACTIVE_OPACITY=$(get_config_value "inactive-opacity" "1.0")
     ACTIVE_OPACITY=$(get_config_value "active-opacity" "1.0")
     FRAME_OPACITY=$(get_config_value "frame-opacity" "1.0")
-    OPACITY_OVERRIDE=$(get_config_value "inactive-opacity-override" "false")
+    OPACITY_OVERRIDE=$(get_config_value "inactive-opacity-override" "true")
     INACTIVE_DIM=$(get_config_value "inactive-dim" "0.0")
     FOCUS_EXCLUDE=$(get_exclude_list "focus-exclude")
     formatted_focus_exclude=$(format_list "$FOCUS_EXCLUDE")
@@ -1131,7 +1148,7 @@ load_config() {
     MARK_WMWIN_FOCUSED=$(get_config_value "mark-wmwin-focused" "true")
     MARK_OVREDIR_FOCUSED=$(get_config_value "mark-ovredir-focused" "true")
     DETECT_ROUNDED_CORNERS=$(get_config_value "detect-rounded-corners" "true")
-    DETECT_CLIENT_OPACITY=$(get_config_value "detect-client-opacity" "true")
+    DETECT_CLIENT_OPACITY=$(get_config_value "detect-client-opacity" "false")
 
     # ─────── WINTYPES ───────
     TOOLTIP_FADE=$(get_wintype_config "tooltip" "fade" "true")
@@ -1294,7 +1311,7 @@ PY
     esac
 }
 
-# Función para restaurar backup
+
 restore_backup() {
     if [ -f "$BACKUP_FILE" ]; then
         if cp "$BACKUP_FILE" "$CONFIG_FILE"; then
@@ -1333,66 +1350,62 @@ generate_picom_conf() {
 #        Autor josejp2424                                             #
 ######################################################################
 # ─────── ESQUINAS REDONDEADAS ───────
-corner-radius = 15;
+corner-radius = ${CORNER_RADIUS};
 rounded-corners-exclude = [
-  "class_g = 'Conky'",
-  "class_g = 'Plank'",
-  "class_g = 'Dunst'",
-  "window_type = 'dock'",
-  "window_type = 'desktop'"
+${formatted_rounded_exclude}
 ];
 # ─────── SOMBRAS ───────
-shadow = true;
-shadow-radius = 12;
-shadow-opacity = 1;
-shadow-offset-x = 0;
-shadow-offset-y = 0;
+shadow = ${SHADOW};
+shadow-radius = ${SHADOW_RADIUS};
+shadow-opacity = ${SHADOW_OPACITY};
+shadow-offset-x = ${SHADOW_OFFSET_X};
+shadow-offset-y = ${SHADOW_OFFSET_Y};
 shadow-exclude = [
-  "class_g = 'Plank'",
-  "class_g = 'Conky'"
+${formatted_shadow_exclude}
 ];
 # ─────── TRANSPARENCIA ───────
-inactive-opacity = 1;
-active-opacity = 1;
-frame-opacity = 1;
-inactive-opacity-override = true;
-inactive-dim = 0;
+inactive-opacity = ${INACTIVE_OPACITY};
+active-opacity = ${ACTIVE_OPACITY};
+frame-opacity = ${FRAME_OPACITY};
+inactive-opacity-override = ${OPACITY_OVERRIDE};
+inactive-dim = ${INACTIVE_DIM};
 focus-exclude = [
+${formatted_focus_exclude}
 ];
 opacity-rule = [
+${formatted_opacity_rules}
 ];
 # ─────── BLUR ───────
-blur-method = "none";
-blur-size = 10;
-blur-strength = 5;
-blur-background = false;
-blur-background-frame = false;
-blur-kern = "3x3box";
+blur-method = "${BLUR_METHOD}";
+blur-size = ${BLUR_SIZE};
+blur-strength = ${BLUR_STRENGTH};
+blur-background = ${BLUR_BACKGROUND};
+blur-background-frame = ${BLUR_BACKGROUND_FRAME};
+blur-kern = "${BLUR_KERNEL}";
 blur-background-exclude = [
-  "window_type = 'dock'",
-  "window_type = 'desktop'"
+${formatted_blur_exclude}
 ];
 # ─────── FADING ───────
-fading = true;
-fade-in-step = 0;
-fade-out-step = 0;
-fade-delta = 10;
+fading = ${FADING};
+fade-in-step = ${FADE_IN_STEP};
+fade-out-step = ${FADE_OUT_STEP};
+fade-delta = ${FADE_DELTA};
 # ─────── GENERAL ───────
-backend = "glx";
-vsync = true;
-use-damage = true;
-log-level = "warn";
-mark-wmwin-focused = true;
-mark-ovredir-focused = true;
-detect-rounded-corners = true;
-detect-client-opacity = false;
+backend = "${BACKEND}";
+vsync = ${VSYNC};
+use-damage = ${USE_DAMAGE};
+log-level = "${LOG_LEVEL}";
+mark-wmwin-focused = ${MARK_WMWIN_FOCUSED};
+mark-ovredir-focused = ${MARK_OVREDIR_FOCUSED};
+detect-rounded-corners = ${DETECT_ROUNDED_CORNERS};
+detect-client-opacity = ${DETECT_CLIENT_OPACITY};
 # ─────── WINTYPES ───────
 wintypes:
 {
-    tooltip = { fade = true; shadow = true; opacity = 1; focus = true; };
-    dock = { shadow = false; };
-    dnd = { shadow = false; };
-    fullscreen = { fade = true; shadow = true; opacity = 1; focus = true; };
+    tooltip = { fade = ${TOOLTIP_FADE}; shadow = ${TOOLTIP_SHADOW}; opacity = ${TOOLTIP_OPACITY}; focus = ${TOOLTIP_FOCUS}; };
+    dock = { shadow = ${DOCK_SHADOW}; };
+    dnd = { shadow = ${DND_SHADOW}; };
+    fullscreen = { fade = ${FULLSCREEN_FADE}; shadow = ${FULLSCREEN_SHADOW}; opacity = ${FULLSCREEN_OPACITY}; focus = ${FULLSCREEN_FOCUS}; };
 };
 EOF
 
@@ -1586,7 +1599,6 @@ create_default_config() {
 #        Configuración inicial sin transparencia                      #
 #        Autor josejp2424                                             #
 ######################################################################
-
 # ─────── ESQUINAS REDONDEADAS ───────
 corner-radius = 15;
 rounded-corners-exclude = [
@@ -1596,7 +1608,6 @@ rounded-corners-exclude = [
   "window_type = 'dock'",
   "window_type = 'desktop'"
 ];
-
 # ─────── SOMBRAS ───────
 shadow = true;
 shadow-radius = 12;
@@ -1607,18 +1618,16 @@ shadow-exclude = [
   "class_g = 'Plank'",
   "class_g = 'Conky'"
 ];
-
 # ─────── TRANSPARENCIA ───────
 inactive-opacity = 1;
 active-opacity = 1;
 frame-opacity = 1;
-inactive-opacity-override = false;
+inactive-opacity-override = true;
 inactive-dim = 0;
 focus-exclude = [
 ];
 opacity-rule = [
 ];
-
 # ─────── BLUR ───────
 blur-method = "none";
 blur-size = 10;
@@ -1630,13 +1639,11 @@ blur-background-exclude = [
   "window_type = 'dock'",
   "window_type = 'desktop'"
 ];
-
 # ─────── FADING ───────
 fading = true;
 fade-in-step = 0;
 fade-out-step = 0;
 fade-delta = 10;
-
 # ─────── GENERAL ───────
 backend = "glx";
 vsync = true;
@@ -1645,8 +1652,7 @@ log-level = "warn";
 mark-wmwin-focused = true;
 mark-ovredir-focused = true;
 detect-rounded-corners = true;
-detect-client-opacity = true;
-
+detect-client-opacity = false;
 # ─────── WINTYPES ───────
 wintypes:
 {
