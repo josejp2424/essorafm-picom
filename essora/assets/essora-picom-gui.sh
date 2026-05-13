@@ -1141,7 +1141,7 @@ load_config() {
     formatted_blur_exclude=$(format_list "$BLUR_EXCLUDE")
 
     # ─────── GENERAL ───────
-    BACKEND=$(get_config_value "backend" "glx")
+    BACKEND=$(get_config_value "backend" "xrender")
     VSYNC=$(get_config_value "vsync" "true")
     USE_DAMAGE=$(get_config_value "use-damage" "true")
     LOG_LEVEL=$(get_config_value "log-level" "warn")
@@ -1645,7 +1645,7 @@ fade-in-step = 0;
 fade-out-step = 0;
 fade-delta = 10;
 # ─────── GENERAL ───────
-backend = "glx";
+backend = "xrender";
 vsync = true;
 use-damage = true;
 log-level = "warn";
