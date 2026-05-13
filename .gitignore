@@ -56,6 +56,7 @@ target
 *.conf
 !/tests/configs/*.conf
 !/data/*.conf
+!essora/assets/essorafm-picom.conf
 perf.data
 perf.data.old
 core.*
